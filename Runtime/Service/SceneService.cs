@@ -1,6 +1,8 @@
 using System;
 using System.Collections;
 using System.Collections.Generic;
+using System.Threading.Tasks;
+using NiumaScene.Checkpoint;
 using NiumaScene.Data;
 using NiumaScene.Enum;
 using NiumaScene.Spawn;
@@ -23,6 +25,7 @@ namespace NiumaScene.Service
         private readonly bool _logWarnings;
         private readonly List<SceneReturnContext> _returnContexts = new List<SceneReturnContext>(8);
         private readonly HashSet<string> _returnRequestIds = new HashSet<string>(StringComparer.Ordinal);
+        private ISceneCheckpointRequester _checkpointRequester;
 
         private SceneLoadingSnapshot _loadingSnapshot = SceneLoadingSnapshot.Empty();
         private SceneTransitionHandle _activeHandle;
@@ -42,7 +45,8 @@ namespace NiumaScene.Service
             int maxReturnContextDepth,
             SceneReturnOverflowPolicy defaultOverflowPolicy,
             bool freezeInputDuringLoadByDefault,
-            bool logWarnings)
+            bool logWarnings,
+            ISceneCheckpointRequester checkpointRequester)
         {
             _coroutineHost = coroutineHost;
             _fallbackSceneName = fallbackSceneName;
@@ -50,6 +54,12 @@ namespace NiumaScene.Service
             _defaultOverflowPolicy = defaultOverflowPolicy;
             _freezeInputDuringLoadByDefault = freezeInputDuringLoadByDefault;
             _logWarnings = logWarnings;
+            _checkpointRequester = checkpointRequester;
+        }
+
+        public void SetCheckpointRequester(ISceneCheckpointRequester checkpointRequester)
+        {
+            _checkpointRequester = checkpointRequester;
         }
 
         public SceneTransitionHandle LoadScene(SceneTransitionRequest request)
@@ -211,6 +221,20 @@ namespace NiumaScene.Service
             UpdateLoadingSnapshot(handle, request, SceneLoadStatus.Loading, 0f, SceneLoadErrorCode.None, null);
 
             var fromScene = SceneManager.GetActiveScene().name;
+            var checkpointResult = default(SceneCheckpointSaveResult);
+            if (request.Options != null && request.Options.RequestCheckpointSave)
+            {
+                yield return RequestCheckpointSaveBeforeLoad(request, handle, fromScene, result => checkpointResult = result);
+
+                if (handle.Status == SceneLoadStatus.CancelRequested)
+                {
+                    RollbackPushedContext(pushedContext);
+                    CompleteCancelled(handle, "场景加载在检查点保存后被取消。");
+                    FinishActiveRequest();
+                    yield break;
+                }
+            }
+
             AsyncOperation operation = null;
             var loadFailed = false;
             var errorMessage = default(string);
@@ -238,7 +262,7 @@ namespace NiumaScene.Service
             {
                 RollbackPushedContext(pushedContext);
                 var usedFallbackScene = TryLoadFallbackScene();
-                CompleteLoadFailedWithFallbackResult(handle, request, fromScene, errorMessage, usedFallbackScene);
+                CompleteLoadFailedWithFallbackResult(handle, request, fromScene, errorMessage, usedFallbackScene, checkpointResult);
                 FinishActiveRequest();
                 yield break;
             }
@@ -277,6 +301,7 @@ namespace NiumaScene.Service
             result.PushedReturnContext = pushedContext;
             result.DroppedReturnContext = !string.IsNullOrWhiteSpace(droppedContextId);
             result.DroppedReturnContextId = droppedContextId;
+            ApplyCheckpointResult(result, request, checkpointResult);
 
             if (result.Succeeded && TryConsumeReturnRequest(handle.RequestId))
             {
@@ -555,7 +580,8 @@ namespace NiumaScene.Service
             SceneTransitionRequest request,
             string fromScene,
             string message,
-            bool usedFallbackScene)
+            bool usedFallbackScene,
+            SceneCheckpointSaveResult checkpointResult)
         {
             _returnRequestIds.Remove(handle.RequestId);
 
@@ -565,10 +591,103 @@ namespace NiumaScene.Service
             result.ActivatedSceneName = usedFallbackScene ? _fallbackSceneName : SceneManager.GetActiveScene().name;
             result.UsedFallbackScene = usedFallbackScene;
             result.FallbackSceneName = usedFallbackScene ? _fallbackSceneName : null;
+            ApplyCheckpointResult(result, request, checkpointResult);
 
             handle.Complete(result);
             UpdateLoadingSnapshot(handle, request, SceneLoadStatus.Failed, 0f, SceneLoadErrorCode.LoadFailed, message);
             Warn(message);
+        }
+
+        private IEnumerator RequestCheckpointSaveBeforeLoad(
+            SceneTransitionRequest request,
+            SceneTransitionHandle handle,
+            string fromScene,
+            Action<SceneCheckpointSaveResult> onCompleted)
+        {
+            if (_checkpointRequester == null)
+            {
+                const string missingMessage = "已请求检查点保存，但未配置 ISceneCheckpointRequester。场景切换将继续执行。";
+                Warn(missingMessage);
+                onCompleted?.Invoke(SceneCheckpointSaveResult.Fail(missingMessage));
+                yield break;
+            }
+
+            var checkpointRequest = new SceneCheckpointSaveRequest
+            {
+                RequestId = handle.RequestId,
+                Reason = request.Purpose.ToString(),
+                SourceSceneName = fromScene,
+                TargetSceneName = request.Target?.SceneName,
+                Purpose = request.Purpose,
+                CreatedUnixTimeMs = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds()
+            };
+
+            Task<SceneCheckpointSaveResult> task;
+            try
+            {
+                task = _checkpointRequester.RequestCheckpointSaveAsync(checkpointRequest);
+            }
+            catch (Exception exception)
+            {
+                var message = $"发起检查点保存失败：{exception.Message}";
+                Warn(message);
+                onCompleted?.Invoke(SceneCheckpointSaveResult.Fail(message));
+                yield break;
+            }
+
+            if (task == null)
+            {
+                const string nullTaskMessage = "检查点保存请求返回空 Task，场景切换将继续执行。";
+                Warn(nullTaskMessage);
+                onCompleted?.Invoke(SceneCheckpointSaveResult.Fail(nullTaskMessage));
+                yield break;
+            }
+
+            while (!task.IsCompleted)
+            {
+                UpdateLoadingSnapshot(handle, request, SceneLoadStatus.Loading, 0f, SceneLoadErrorCode.None, null);
+                yield return null;
+            }
+
+            SceneCheckpointSaveResult result;
+            if (task.IsFaulted)
+            {
+                var message = $"检查点保存异常：{task.Exception?.GetBaseException().Message}";
+                Warn(message);
+                result = SceneCheckpointSaveResult.Fail(message);
+            }
+            else if (task.IsCanceled)
+            {
+                const string message = "检查点保存被取消。";
+                Warn(message);
+                result = SceneCheckpointSaveResult.Fail(message);
+            }
+            else
+            {
+                result = task.Result ?? SceneCheckpointSaveResult.Fail("检查点保存返回空结果。");
+                if (!result.Succeeded)
+                {
+                    Warn($"检查点保存失败：{result.Message}");
+                }
+            }
+
+            onCompleted?.Invoke(result);
+        }
+
+        private static void ApplyCheckpointResult(
+            SceneTransitionResult transitionResult,
+            SceneTransitionRequest request,
+            SceneCheckpointSaveResult checkpointResult)
+        {
+            if (transitionResult == null || request?.Options == null || !request.Options.RequestCheckpointSave)
+            {
+                return;
+            }
+
+            transitionResult.RequestedCheckpointSave = true;
+            transitionResult.CheckpointSaveSucceeded = checkpointResult != null && checkpointResult.Succeeded;
+            transitionResult.CheckpointSaveSlotId = checkpointResult?.SlotId;
+            transitionResult.CheckpointSaveMessage = checkpointResult?.Message;
         }
 
         private SceneTransitionHandle Fail(string requestId, SceneLoadErrorCode errorCode, string message)

@@ -1,8 +1,9 @@
 {
-  "name": "NiumaScene.TPCBridge",
+  "name": "NiumaScene.SaveBridge",
   "references": [
     "NiumaScene.Runtime",
-    "NiumaTPC.Runtime"
+    "NiumaSave.Runtime",
+    "NiumaCore.Runtime"
   ],
   "includePlatforms": [],
   "excludePlatforms": [],

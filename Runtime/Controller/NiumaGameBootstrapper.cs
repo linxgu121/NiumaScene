@@ -32,6 +32,9 @@ namespace NiumaScene.Controller
         [Tooltip("加载首场景时是否清空返回上下文栈。")]
         [SerializeField] private bool clearReturnStackBeforeFirstScene = true;
 
+        [Tooltip("加载首场景时是否显示 Loading UI。需要 Bootstrap 场景中配置 SceneLoadingStateBridge 和 LoadingPanel。")]
+        [SerializeField] private bool showLoadingUIOnFirstScene = true;
+
         [Header("引用")]
         [Tooltip("NiumaScene 根控制器。为空时会在 BootstrapRoot 子物体中自动查找。")]
         [SerializeField] private NiumaSceneController sceneController;
@@ -85,6 +88,7 @@ namespace NiumaScene.Controller
                 Options = new SceneTransitionOptions
                 {
                     FreezeInputDuringLoad = true,
+                    ShowLoadingUI = showLoadingUIOnFirstScene,
                     ReplacePendingRequest = true,
                     ReturnOverflowPolicy = SceneReturnOverflowPolicy.RejectNew
                 }

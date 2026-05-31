@@ -1,8 +1,8 @@
 {
-  "name": "NiumaScene.TPCBridge",
+  "name": "NiumaScene.UIBridge",
   "references": [
     "NiumaScene.Runtime",
-    "NiumaTPC.Runtime"
+    "Unity.TextMeshPro"
   ],
   "includePlatforms": [],
   "excludePlatforms": [],

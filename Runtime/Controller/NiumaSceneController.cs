@@ -1,3 +1,4 @@
+using NiumaScene.Checkpoint;
 using NiumaScene.Data;
 using NiumaScene.Enum;
 using NiumaScene.Service;
@@ -26,10 +27,21 @@ namespace NiumaScene.Controller
         [Tooltip("默认是否在场景加载期间冻结输入。第二阶段只保留配置，第四阶段接入具体输入冻结桥接。")]
         [SerializeField] private bool freezeInputDuringLoadByDefault = true;
 
+        [Tooltip("默认场景切换是否显示 Loading UI。入口脚本也可以在 SceneTransitionOptions 中单次覆盖。")]
+        [SerializeField] private bool showLoadingUIByDefault = true;
+
         [Tooltip("是否输出场景模块警告日志。")]
         [SerializeField] private bool logWarnings = true;
 
+        [Header("检查点保存")]
+        [Tooltip("实现 ISceneCheckpointRequester 的组件。通常绑定 NiumaSceneSaveCheckpointRequester，用于把场景保存意图转发给 NiumaSave。")]
+        [SerializeField] private MonoBehaviour checkpointRequesterProvider;
+
+        [Tooltip("未手动绑定检查点请求器时，是否自动查找场景中的 ISceneCheckpointRequester。正式场景建议手动绑定。")]
+        [SerializeField] private bool autoFindCheckpointRequester = true;
+
         private SceneService _sceneService;
+        private ISceneCheckpointRequester _checkpointRequester;
 
         public ISceneService SceneService
         {
@@ -62,7 +74,18 @@ namespace NiumaScene.Controller
                 maxReturnContextDepth,
                 defaultReturnOverflowPolicy,
                 freezeInputDuringLoadByDefault,
-                logWarnings);
+                logWarnings,
+                ResolveCheckpointRequester(false));
+        }
+
+        /// <summary>
+        /// 设置检查点保存请求器。
+        /// 上层启动器或测试场景可用它显式注入保存桥接对象。
+        /// </summary>
+        public void SetCheckpointRequester(ISceneCheckpointRequester checkpointRequester)
+        {
+            _checkpointRequester = checkpointRequester;
+            _sceneService?.SetCheckpointRequester(checkpointRequester);
         }
 
         public SceneTransitionHandle LoadScene(SceneTransitionRequest request)
@@ -110,9 +133,47 @@ namespace NiumaScene.Controller
             return new SceneTransitionOptions
             {
                 FreezeInputDuringLoad = freezeInputDuringLoadByDefault,
+                ShowLoadingUI = showLoadingUIByDefault,
                 ReplacePendingRequest = true,
                 ReturnOverflowPolicy = defaultReturnOverflowPolicy
             };
+        }
+
+        private ISceneCheckpointRequester ResolveCheckpointRequester(bool warn)
+        {
+            if (_checkpointRequester != null)
+            {
+                return _checkpointRequester;
+            }
+
+            if (checkpointRequesterProvider != null)
+            {
+                _checkpointRequester = checkpointRequesterProvider as ISceneCheckpointRequester;
+                if (_checkpointRequester == null && warn && logWarnings)
+                {
+                    Debug.LogWarning("[NiumaSceneController] CheckpointRequesterProvider 未实现 ISceneCheckpointRequester。", this);
+                }
+
+                return _checkpointRequester;
+            }
+
+            if (!autoFindCheckpointRequester)
+            {
+                return null;
+            }
+
+            var behaviours = FindObjectsByType<MonoBehaviour>(FindObjectsInactive.Include, FindObjectsSortMode.None);
+            for (var i = 0; i < behaviours.Length; i++)
+            {
+                if (behaviours[i] is ISceneCheckpointRequester requester)
+                {
+                    checkpointRequesterProvider = behaviours[i];
+                    _checkpointRequester = requester;
+                    return _checkpointRequester;
+                }
+            }
+
+            return null;
         }
     }
 }

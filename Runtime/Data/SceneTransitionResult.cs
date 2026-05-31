@@ -55,6 +55,18 @@ namespace NiumaScene.Data
         /// <summary>实际使用的 fallback 场景名。</summary>
         public string FallbackSceneName;
 
+        /// <summary>本次场景切换是否请求了检查点保存。</summary>
+        public bool RequestedCheckpointSave;
+
+        /// <summary>检查点保存是否成功。未请求时为 false。</summary>
+        public bool CheckpointSaveSucceeded;
+
+        /// <summary>检查点保存写入的槽位 ID。</summary>
+        public string CheckpointSaveSlotId;
+
+        /// <summary>检查点保存的调试信息。</summary>
+        public string CheckpointSaveMessage;
+
         public static SceneTransitionResult Success(string requestId, SceneLoadStatus status = SceneLoadStatus.Completed)
         {
             return new SceneTransitionResult
