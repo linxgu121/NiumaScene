@@ -15,6 +15,8 @@ namespace NiumaScene.Data
         public string TargetSceneName;
         public float Progress;
         public bool IsLoading;
+        public bool FreezeInputDuringLoad;
+        public bool ShowLoadingUI;
         public SceneLoadErrorCode ErrorCode = SceneLoadErrorCode.None;
         public string ErrorMessage;
 
@@ -25,6 +27,8 @@ namespace NiumaScene.Data
                 Status = SceneLoadStatus.None,
                 Progress = 0f,
                 IsLoading = false,
+                FreezeInputDuringLoad = false,
+                ShowLoadingUI = false,
                 ErrorCode = SceneLoadErrorCode.None
             };
         }

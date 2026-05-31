@@ -3,6 +3,7 @@ using System.Collections;
 using System.Collections.Generic;
 using NiumaScene.Data;
 using NiumaScene.Enum;
+using NiumaScene.Spawn;
 using UnityEngine;
 using UnityEngine.SceneManagement;
 
@@ -10,7 +11,7 @@ namespace NiumaScene.Service
 {
     /// <summary>
     /// 场景服务第一版实现。
-    /// 负责场景加载仲裁、返回上下文栈、Pending 请求替换与取消；SpawnPoint 传送在第三阶段接入。
+    /// 负责场景加载仲裁、返回上下文栈、Pending 请求替换、取消与 SpawnPoint 传送。
     /// </summary>
     public sealed class SceneService : ISceneService
     {
@@ -107,12 +108,23 @@ namespace NiumaScene.Service
         public SceneTransitionHandle TeleportToSpawnPoint(string spawnPointId)
         {
             var requestId = CreateRequestId();
-            if (string.IsNullOrWhiteSpace(spawnPointId))
+
+            if (!TryApplySpawnPoint(spawnPointId, out var appliedSpawnPointId, out var errorCode, out var message))
             {
-                return Fail(requestId, SceneLoadErrorCode.SpawnPointNotFound, "出生点 ID 为空，无法执行同场景传送。");
+                Warn(message);
+                return Fail(requestId, errorCode, message);
             }
 
-            return Fail(requestId, SceneLoadErrorCode.SpawnPointNotFound, "SpawnPoint 查找和玩家传送将在 NiumaScene 第三阶段接入。");
+            var activeSceneName = SceneManager.GetActiveScene().name;
+            var result = SceneTransitionResult.Success(requestId);
+            result.FromSceneName = activeSceneName;
+            result.TargetSceneName = activeSceneName;
+            result.ActivatedSceneName = activeSceneName;
+            result.AppliedSpawnPointId = appliedSpawnPointId;
+
+            var handle = new SceneTransitionHandle(requestId);
+            handle.Complete(result);
+            return handle;
         }
 
         public bool CancelLoad(string requestId)
@@ -240,10 +252,19 @@ namespace NiumaScene.Service
             handle.SetStatus(SceneLoadStatus.Activating);
             UpdateLoadingSnapshot(handle, request, SceneLoadStatus.Activating, 1f, SceneLoadErrorCode.None, null);
 
-            // 等待一帧，让目标场景对象完成 Awake / OnEnable。SpawnPoint 恢复在第三阶段接入。
+            // 等待一帧，让目标场景对象完成 Awake / OnEnable，降低 SpawnPoint / SpawnTarget 初始化时序风险。
             yield return null;
 
             var activeSceneName = SceneManager.GetActiveScene().name;
+            var appliedSpawnPointId = default(string);
+            if (request.Target.RestorePlayerAtSpawnPoint && handle.Status != SceneLoadStatus.CancelRequested)
+            {
+                if (!TryApplySpawnPoint(request.Target.PreferredSpawnPointId, out appliedSpawnPointId, out _, out var spawnMessage))
+                {
+                    Warn(spawnMessage);
+                }
+            }
+
             var result = SceneTransitionResult.Success(
                 handle.RequestId,
                 handle.Status == SceneLoadStatus.CancelRequested ? SceneLoadStatus.Cancelled : SceneLoadStatus.Completed);
@@ -252,6 +273,7 @@ namespace NiumaScene.Service
             result.FromSceneName = fromScene;
             result.TargetSceneName = request.Target.SceneName;
             result.ActivatedSceneName = activeSceneName;
+            result.AppliedSpawnPointId = appliedSpawnPointId;
             result.PushedReturnContext = pushedContext;
             result.DroppedReturnContext = !string.IsNullOrWhiteSpace(droppedContextId);
             result.DroppedReturnContextId = droppedContextId;
@@ -300,8 +322,7 @@ namespace NiumaScene.Service
         {
             if (request.Target.RestorePlayerAtSpawnPoint)
             {
-                var teleportHandle = TeleportToSpawnPoint(request.Target.PreferredSpawnPointId);
-                handle.Complete(teleportHandle.Result);
+                CompleteSameSceneTeleportRequest(request, handle);
                 return;
             }
 
@@ -315,6 +336,30 @@ namespace NiumaScene.Service
             {
                 result.PoppedReturnContext = true;
             }
+            handle.Complete(result);
+        }
+
+        private void CompleteSameSceneTeleportRequest(SceneTransitionRequest request, SceneTransitionHandle handle)
+        {
+            var activeSceneName = SceneManager.GetActiveScene().name;
+            if (!TryApplySpawnPoint(request.Target.PreferredSpawnPointId, out var appliedSpawnPointId, out var errorCode, out var message))
+            {
+                Warn(message);
+                handle.Complete(SceneTransitionResult.Failure(handle.RequestId, errorCode, message));
+                return;
+            }
+
+            var result = SceneTransitionResult.Success(handle.RequestId, SceneLoadStatus.Skipped);
+            result.FromSceneName = activeSceneName;
+            result.TargetSceneName = request.Target.SceneName;
+            result.ActivatedSceneName = activeSceneName;
+            result.AppliedSpawnPointId = appliedSpawnPointId;
+            result.ErrorMessage = "目标场景已经是当前激活场景，已执行同场景 SpawnPoint 传送。";
+            if (request.Purpose == SceneLoadPurpose.Return && TryConsumeReturnRequest(handle.RequestId))
+            {
+                result.PoppedReturnContext = true;
+            }
+
             handle.Complete(result);
         }
 
@@ -457,6 +502,46 @@ namespace NiumaScene.Service
             return string.Equals(SceneManager.GetActiveScene().name, sceneName, StringComparison.Ordinal);
         }
 
+        private bool TryApplySpawnPoint(
+            string preferredSpawnPointId,
+            out string appliedSpawnPointId,
+            out SceneLoadErrorCode errorCode,
+            out string message)
+        {
+            appliedSpawnPointId = null;
+            errorCode = SceneLoadErrorCode.None;
+            message = null;
+
+            if (!SceneSpawnRegistry.TryFindSpawnPoint(preferredSpawnPointId, out var spawnPoint, out var usedDefault, out var spawnWarning))
+            {
+                errorCode = SceneLoadErrorCode.SpawnPointNotFound;
+                message = spawnWarning;
+                return false;
+            }
+
+            if (!string.IsNullOrWhiteSpace(spawnWarning))
+            {
+                Warn(spawnWarning);
+            }
+
+            if (!SceneSpawnRegistry.TryFindSpawnTarget(out var spawnTarget))
+            {
+                errorCode = SceneLoadErrorCode.SpawnTargetMissing;
+                message = "当前场景没有可用 ISceneSpawnTarget，已跳过玩家位置恢复。";
+                return false;
+            }
+
+            spawnTarget.TeleportTo(spawnPoint.Position, spawnPoint.Rotation);
+            appliedSpawnPointId = spawnPoint.SpawnPointId;
+
+            if (usedDefault && !string.IsNullOrWhiteSpace(preferredSpawnPointId))
+            {
+                message = $"指定 SpawnPoint 不可用，已使用默认出生点：{appliedSpawnPointId}";
+            }
+
+            return true;
+        }
+
         private void CompleteFailure(SceneTransitionHandle handle, SceneLoadErrorCode errorCode, string message)
         {
             _returnRequestIds.Remove(handle.RequestId);
@@ -531,6 +616,8 @@ namespace NiumaScene.Service
                             || status == SceneLoadStatus.Loading
                             || status == SceneLoadStatus.Activating
                             || status == SceneLoadStatus.CancelRequested,
+                FreezeInputDuringLoad = request?.Options != null && request.Options.FreezeInputDuringLoad,
+                ShowLoadingUI = request?.Options != null && request.Options.ShowLoadingUI,
                 ErrorCode = errorCode,
                 ErrorMessage = errorMessage
             };
