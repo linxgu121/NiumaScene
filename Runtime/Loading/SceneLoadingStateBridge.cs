@@ -22,11 +22,11 @@ namespace NiumaScene.Loading
         [SerializeField] private bool autoFindSceneController = true;
 
         [Header("加载表现")]
-        [Tooltip("实现 ISceneLoadingReceiver 的组件，例如 LoadingPanel 桥接脚本。为空时只处理输入冻结。")]
+        [Tooltip("Loading 面板脚本。拖 SceneLoadingPanelBridge 或团队制作的 LoadingPanel 脚本；为空时只冻结/解冻输入，不显示 Loading UI。")]
         [SerializeField] private MonoBehaviour loadingReceiverProvider;
 
         [Header("输入冻结")]
-        [Tooltip("实现 ISceneInputBlockTarget 的组件列表，例如 TPCSceneInputBlockTarget、InteractSceneInputBlockTarget。")]
+        [Tooltip("需要冻结输入的目标脚本列表。玩家控制拖 TPCSceneInputBlockTarget，交互输入拖 InteractSceneInputBlockTarget；还有其它输入系统时再拖对应适配脚本。")]
         [SerializeField] private MonoBehaviour[] inputBlockTargetProviders = Array.Empty<MonoBehaviour>();
 
         [Tooltip("输入冻结原因。适配器应使用该原因只解除自己加上的阻塞。")]
@@ -138,7 +138,7 @@ namespace NiumaScene.Loading
             _loadingReceiver = loadingReceiverProvider as ISceneLoadingReceiver;
             if (loadingReceiverProvider != null && _loadingReceiver == null)
             {
-                Warn("LoadingReceiverProvider 未实现 ISceneLoadingReceiver。", logInvalid);
+                Warn("LoadingReceiver 绑定的不是 Loading 面板脚本，请拖 SceneLoadingPanelBridge 或团队制作的 LoadingPanel 脚本。", logInvalid);
             }
 
             _inputBlockTargets.Clear();
@@ -161,7 +161,7 @@ namespace NiumaScene.Loading
                     continue;
                 }
 
-                Warn($"InputBlockTargetProviders[{i}] 未实现 ISceneInputBlockTarget。", logInvalid);
+                Warn($"InputBlockTargetProviders[{i}] 绑定的不是输入冻结适配脚本。玩家控制拖 TPCSceneInputBlockTarget，交互输入拖 InteractSceneInputBlockTarget。", logInvalid);
             }
         }
 

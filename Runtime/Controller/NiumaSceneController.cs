@@ -34,7 +34,7 @@ namespace NiumaScene.Controller
         [SerializeField] private bool logWarnings = true;
 
         [Header("检查点保存")]
-        [Tooltip("实现 ISceneCheckpointRequester 的组件。通常绑定 NiumaSceneSaveCheckpointRequester，用于把场景保存意图转发给 NiumaSave。")]
+        [Tooltip("检查点保存请求脚本。通常拖 NiumaSceneSaveCheckpointRequester；没有接入 NiumaSave 检查点流程时可留空。")]
         [SerializeField] private MonoBehaviour checkpointRequesterProvider;
 
         [Tooltip("未手动绑定检查点请求器时，是否自动查找场景中的 ISceneCheckpointRequester。正式场景建议手动绑定。")]
@@ -151,7 +151,7 @@ namespace NiumaScene.Controller
                 _checkpointRequester = checkpointRequesterProvider as ISceneCheckpointRequester;
                 if (_checkpointRequester == null && warn && logWarnings)
                 {
-                    Debug.LogWarning("[NiumaSceneController] CheckpointRequesterProvider 未实现 ISceneCheckpointRequester。", this);
+                    Debug.LogWarning("[NiumaSceneController] CheckpointRequester 绑定的不是检查点保存请求脚本，请拖 NiumaSceneSaveCheckpointRequester；未接入检查点保存时可留空。", this);
                 }
 
                 return _checkpointRequester;
