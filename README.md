@@ -24,6 +24,16 @@ NiumaScene 是场景流程模块，负责统一场景加载、返回上下文、
 - 同场景传送可使用 TeleportToSpawnPoint，不必重新加载场景。
 - Unity Button 不建议直接绑定 `NiumaSceneController.LoadScene`，因为它返回 `SceneTransitionHandle`，不适合作为 Inspector 按钮事件。按钮跳转请使用 `SceneButtonAction`。
 
+### 场景切换配置速查
+- `Purpose`：选择本次切换用途。`MiniGame`（RPG 进入小游戏）、`EnterBuilding`（室外进室内）、`ExitBuilding`（室内回室外）、`Teleport`（传送点/地图跳转）、`Respawn`（死亡回检查点）、`Return`（返回上一场景）、`Debug`（测试按钮）。
+- `LoadMode`：`Single`（主场景切换，会卸载旧业务场景，RPG 和 MiniGame 往返推荐）；`Additive`（叠加场景，适合常驻 Core/Bootstrap 或子场景；第一版服务会规整为 Single）。
+- `PushReturnContext`：开启（进入 MiniGame、建筑内部、临时副本，之后需要返回）；关闭（主菜单进入游戏、单向传送、纯测试场景）。
+- `ReturnSceneName`：为空（自动记录当前激活场景）；填写（强制返回指定场景，适合特殊入口）。
+- `ReturnSpawnPointId`：填写返回点（NPC 面前、建筑门口、小游戏入口），目标场景中必须有同 ID 的 `SceneSpawnPoint`。
+- `ClearReturnStackBeforePush`：开启（从主菜单重新开始游戏，清掉旧历史）；关闭（普通进建筑、进 MiniGame）。
+- `FreezeInputDuringLoad`：开启（正式跨场景切换，防止玩家继续移动/交互）；关闭（开发调试或不影响操作的 UI 流程）。
+- `ShowLoadingUI`：开启（跨场景加载需要过渡）；关闭（同场景传送或极短加载）。
+
 ## 场景使用方法
 推荐放置方式：`SceneRoot` 一个全局场景流程物体承载加载服务、Loading UI、输入冻结和检查点桥接。
 

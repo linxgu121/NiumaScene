@@ -19,42 +19,42 @@ namespace NiumaScene.UIBridge
         [SerializeField] private bool autoFindSceneController = true;
 
         [Header("加载目标")]
-        [Tooltip("按钮要进入的目标场景名，必须与 Build Settings 中的场景名一致。")]
+        [Tooltip("按钮要进入的目标场景名（必须与 Build Settings 中的场景名一致，例如 MiniGame_Start、RPG_Village）。")]
         [SerializeField] private string targetSceneName;
 
-        [Tooltip("进入目标场景后优先使用的出生点 ID。为空时不指定出生点。")]
+        [Tooltip("进入目标场景后优先使用的出生点 ID（传送点/建筑入口/小游戏返回点；为空时不指定出生点）。")]
         [SerializeField] private string targetSpawnPointId;
 
-        [Tooltip("进入目标场景后是否把玩家放到目标出生点。")]
+        [Tooltip("进入目标场景后是否把玩家放到目标出生点（进入 RPG/建筑/传送点常用；纯 UI 场景可关闭）。")]
         [SerializeField] private bool restorePlayerAtTargetSpawnPoint;
 
-        [Tooltip("本次场景切换用途。MiniGame、建筑内部、主线剧情等可用不同 Purpose 方便调试和后续扩展。")]
+        [Tooltip("本次场景切换用途（MiniGame=进入小游戏；EnterBuilding=进建筑；Teleport=传送点；Return=返回；Debug=测试按钮）。")]
         [SerializeField] private SceneLoadPurpose purpose = SceneLoadPurpose.None;
 
         [Header("返回上下文")]
-        [Tooltip("是否把当前场景压入返回栈。进入 MiniGame、建筑内部、临时副本时通常开启。")]
+        [Tooltip("是否把当前场景压入返回栈（RPG→MiniGame、室外→室内时开启；主菜单→游戏、单向传送通常关闭）。")]
         [SerializeField] private bool pushReturnContext;
 
-        [Tooltip("返回时使用的场景名。为空时由场景服务使用当前激活场景名。")]
+        [Tooltip("返回时使用的场景名（为空=自动记录当前场景；填写=强制返回指定场景，适合特殊入口）。")]
         [SerializeField] private string returnSceneName;
 
-        [Tooltip("返回时使用的出生点 ID。例如 NPC 面前、小游戏入口、建筑门口。")]
+        [Tooltip("返回时使用的出生点 ID（NPC 面前、小游戏入口、建筑门口；用于 ReturnToPreviousScene 恢复位置）。")]
         [SerializeField] private string returnSpawnPointId;
 
-        [Tooltip("压入新返回上下文前是否清空旧返回栈。主菜单进入游戏等顶层流程可开启。")]
+        [Tooltip("压入新返回上下文前是否清空旧返回栈（从主菜单开始新游戏可开启；普通进建筑/小游戏请关闭）。")]
         [SerializeField] private bool clearReturnStackBeforePush;
 
         [Header("加载选项")]
-        [Tooltip("加载期间是否冻结玩家输入。")]
+        [Tooltip("加载期间是否冻结玩家输入（正式切场景建议开启；调试 UI 按钮可按需关闭）。")]
         [SerializeField] private bool freezeInputDuringLoad = true;
 
-        [Tooltip("加载期间是否显示 Loading UI。")]
+        [Tooltip("加载期间是否显示 Loading UI（跨场景切换建议开启；同场景传送通常可关闭）。")]
         [SerializeField] private bool showLoadingUI = true;
 
-        [Tooltip("发起切换时是否请求检查点保存。")]
+        [Tooltip("发起切换时是否请求检查点保存（剧情节点/进入小游戏/进入副本可开启；普通 UI 跳转可关闭）。")]
         [SerializeField] private bool requestCheckpointSave;
 
-        [Tooltip("已有 Pending 请求时，是否用本次请求替换旧 Pending。")]
+        [Tooltip("已有 Pending 请求时是否用本次请求替换旧 Pending（连续点击按钮只保留最后一次意图时开启）。")]
         [SerializeField] private bool replacePendingRequest = true;
 
         [Header("调试")]
