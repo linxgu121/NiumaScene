@@ -23,6 +23,7 @@ NiumaScene 是场景流程模块，负责统一场景加载、返回上下文、
 - 返回点 ID 应配置在 NPC 或入口附近的 SceneSpawnPoint。
 - 同场景传送可使用 TeleportToSpawnPoint，不必重新加载场景。
 - Unity Button 不建议直接绑定 `NiumaSceneController.LoadScene`，因为它返回 `SceneTransitionHandle`，不适合作为 Inspector 按钮事件。按钮跳转请使用 `SceneButtonAction`。
+- 核心场景搭建请先阅读 [核心场景制作指南.md](核心场景制作指南.md)，全局控制器应放核心场景常驻，业务场景只放场景内容。
 
 ### 场景切换配置速查
 - `Purpose`：选择本次切换用途。`MiniGame`（RPG 进入小游戏）、`EnterBuilding`（室外进室内）、`ExitBuilding`（室内回室外）、`Teleport`（传送点/地图跳转）、`Respawn`（死亡回检查点）、`Return`（返回上一场景）、`Debug`（测试按钮）。
