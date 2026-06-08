@@ -39,15 +39,125 @@ NiumaScene 是场景流程模块，负责统一场景加载、返回上下文、
 推荐放置方式：`SceneRoot` 一个全局场景流程物体承载加载服务、Loading UI、输入冻结和检查点桥接。
 
 ## 场景挂载与 Inspector 配置
-NiumaScene 的挂载脚本较多，已单独整理成 [核心场景制作指南.md](核心场景制作指南.md)。  
-该文档包含：
+NiumaScene 的完整核心场景搭建流程见 [核心场景制作指南.md](核心场景制作指南.md)。README 中保留常用脚本速查，方便策划和关卡同学直接照着 Inspector 配置。
 
-- 核心场景推荐层级。
-- 每个脚本建议挂载位置。
-- Inspector 字段怎么填。
-- 字段能否留空。
-- 不填或关闭后的影响。
-- RPG、MiniGame、建筑等业务场景还需要放哪些局部脚本。
+### NiumaGameBootstrapper
+建议挂载位置：`CoreScene/BootstrapRoot`。
+
+用途：让核心场景常驻，并在启动后进入第一个正式业务场景。
+
+| 字段 | 怎么填 | 可否留空 | 不填会怎样 |
+| --- | --- | --- | --- |
+| `Bootstrap Root` | 拖 `BootstrapRoot` 自己 | 可以 | 为空时使用当前 GameObject |
+| `Dont Destroy On Load` | 正式场景开启 | 不建议关闭 | 关闭后切场景会卸载核心服务，返回栈丢失 |
+| `Destroy Duplicate Bootstrap` | 开启 | 不建议关闭 | 重复进入 CoreScene 时可能出现两套全局服务 |
+| `First Scene Name` | 填第一个业务场景名，例如 `RPG_Village` | 可以 | 为空时启动后停留在 CoreScene |
+| `Load First Scene On Start` | 需要自动进游戏时开启 | 可以 | 关闭后要手动调用加载首场景 |
+| `Clear Return Stack Before First Scene` | 正式启动流程开启 | 可以 | 关闭后调试残留返回栈可能影响返回 |
+| `Show Loading UI On First Scene` | 有 Loading UI 时开启 | 可以 | 关闭后首场景加载不显示 Loading |
+| `Scene Controller` | 拖 `SceneRoot` 上的 `NiumaSceneController` | 不建议 | 为空会自动从 BootstrapRoot 子物体查找，层级复杂时可能找不到 |
+
+### NiumaSceneController
+建议挂载位置：`CoreScene/BootstrapRoot/SceneRoot`。
+
+用途：全局唯一场景切换服务，负责加载、返回栈、出生点恢复和检查点保存意图。
+
+| 字段 | 怎么填 | 可否留空 | 不填会怎样 |
+| --- | --- | --- | --- |
+| `Fallback Scene Name` | 填安全兜底场景，例如 `RPG_Village` 或 `MainMenu` | 可以 | 加载失败时只记录错误，不会自动回兜底场景 |
+| `Max Return Context Depth` | 建议 8 | 不可以 | 太小会导致嵌套返回不足，太大不易维护 |
+| `Default Return Overflow Policy` | 建议 `RejectNew` | 不可以 | 策略不合适时可能丢返回链 |
+| `Freeze Input During Load By Default` | 正式跨场景加载开启 | 可以 | 关闭后切场景期间玩家可能继续移动 |
+| `Show Loading UI By Default` | 有 Loading UI 时开启 | 可以 | 关闭后默认不显示 Loading |
+| `Checkpoint Requester Provider` | 拖 `NiumaSceneSaveCheckpointRequester` | 可以 | 留空时请求检查点保存不会真正写档 |
+| `Auto Find Checkpoint Requester` | 测试可开，正式建议手动绑定 | 可以 | 关闭且未绑定时检查点保存不可用 |
+
+### SceneLoadingStateBridge
+建议挂载位置：`CoreScene/BootstrapRoot/SceneRoot/LoadingRoot`。
+
+用途：读取加载状态，推送 Loading UI，并冻结玩家/交互输入。
+
+| 字段 | 怎么填 | 可否留空 | 不填会怎样 |
+| --- | --- | --- | --- |
+| `Scene Controller` | 拖 `NiumaSceneController` | 不建议 | 自动查找失败时 Loading 和输入冻结都不工作 |
+| `Loading Receiver Provider` | 拖 `SceneLoadingPanelBridge` 或自制 LoadingPanel 脚本 | 可以 | 留空时只冻结输入，不显示 Loading UI |
+| `Input Block Target Providers` | 玩家拖 `TPCSceneInputBlockTarget`，交互拖 `InteractSceneInputBlockTarget` | 可以 | 留空时加载期间不会冻结对应输入 |
+| `Input Block Reason` | 默认 `SceneLoading` 即可 | 不建议为空 | 为空会让解除阻塞难以追踪来源 |
+| `Unblock When Loading Ends` | 建议开启 | 可以 | 关闭后加载结束不会自动解除本桥接加的冻结 |
+
+### SceneLoadingPanelBridge
+建议挂载位置：`CoreScene/BootstrapRoot/UIRoot/Canvas_Global/LoadingPanel`。
+
+用途：显示加载面板、进度条、目标场景名和错误信息。
+
+| 字段 | 怎么填 | 可否留空 | 不填会怎样 |
+| --- | --- | --- | --- |
+| `Panel Root` | 拖 Loading 面板根节点 | 可以 | 为空时使用当前物体 |
+| `Canvas Group` | 拖面板上的 `CanvasGroup` | 不建议 | 找不到时淡入淡出和射线控制不稳定 |
+| `Progress Fill` | 拖进度条填充 RectTransform | 可以 | 留空时不显示进度条 |
+| `Status / Target / Progress / Error Text` | 拖对应 TMP 文本 | 可以 | 留空时对应文字不显示 |
+| `Fade In / Fade Out Duration` | 建议 0.15 / 0.2 | 可以为 0 | 为 0 时立即显示/隐藏 |
+| `Use Unscaled Time` | 建议开启 | 可以 | 关闭后 TimeScale=0 时 UI 动画可能不动 |
+| `Disable Root When Hidden` | 建议开启 | 可以 | 关闭后透明面板可能仍参与射线或布局 |
+| `Block Raycasts When Visible` | 建议开启 | 可以 | 关闭后 Loading 期间可能点到后面 UI |
+
+### NiumaSceneSaveCheckpointRequester
+建议挂载位置：`CoreScene/BootstrapRoot/SceneRoot/CheckpointRequester`。
+
+用途：把场景切换中的检查点保存意图转发给 `NiumaSaveController`。
+
+| 字段 | 怎么填 | 可否留空 | 不填会怎样 |
+| --- | --- | --- | --- |
+| `Save Controller` | 拖 `SaveRoot` 上的 `NiumaSaveController` | 不建议 | 自动查找失败时检查点保存失败，但切场景仍可继续 |
+| `Auto Find Save Controller` | 测试可开，正式建议手动绑定 | 可以 | 关闭且未绑定时无法保存检查点 |
+| `Checkpoint Display Name Prefix` | 填检查点名前缀，例如 `进入小游戏前` | 可以 | 为空时使用默认 `Scene Checkpoint` |
+| `Write Mode` | 第一版建议 `LocalOnly` | 不可以 | 配错可能让切场景被云同步阻塞 |
+
+### SceneAudioBridge
+建议挂载位置：`CoreScene/BootstrapRoot/SceneRoot/SceneAudioRoot`。
+
+用途：根据场景和加载状态播放 BGM、环境音、加载开始/完成/失败音效。
+
+| 字段 | 怎么填 | 可否留空 | 不填会怎样 |
+| --- | --- | --- | --- |
+| `Scene Controller` | 拖 `NiumaSceneController` | 不建议 | 找不到时不响应加载状态音效 |
+| `Audio Controller` | 拖 `NiumaAudioController` | 不建议 | 找不到时不播放音频 |
+| `Load Started / Completed / Failed Cue` | 填 `AudioCueDefinition.CueId` | 可以 | 留空时对应流程不播放音效 |
+| `Scene Audio Cues` | 每项填 SceneName、BGM Cue、Ambient Cue | 可以 | 留空时不按场景切音乐/环境音 |
+| `Ambient Channel Id` | 建议 `scene_ambient` | 不建议为空 | 为空时环境音无法播放 |
+| `Stop Ambient When Scene Has No Config` | 按需求开启 | 可以 | 关闭后未配置场景会保留旧环境音 |
+| `Restart Bgm If Same Scene` | 通常关闭 | 可以 | 开启后重复激活同场景会重播 BGM |
+
+### SceneSpawnPoint
+建议挂载位置：业务场景中的 `SpawnPoint_xxx` 物体。
+
+用途：标记玩家进入、返回、复活或传送时的落点。
+
+| 字段 | 怎么填 | 可否留空 | 不填会怎样 |
+| --- | --- | --- | --- |
+| `Spawn Point Id` | 填稳定 ID，例如 `main_default`、`npc_minigame_return` | 不可以 | 返回/传送无法找到正确落点 |
+| `Is Default` | 每个场景建议只勾一个默认点 | 可以 | 没有指定点且无默认点时，恢复位置可能失败 |
+| `Draw Gizmos` | 建议开启 | 可以 | Scene 视图看不到落点方向 |
+| `Gizmos Color` | 默认绿色即可 | 可以 | 只影响 Scene 视图显示 |
+
+### SceneButtonAction
+建议挂载位置：业务场景 UI 按钮、门、传送点或对话入口物体。
+
+用途：给 Unity Button / UnityEvent 使用，把无返回值按钮事件转发给 `NiumaSceneController`。
+
+| 字段 | 怎么填 | 可否留空 | 不填会怎样 |
+| --- | --- | --- | --- |
+| `Scene Controller` | 拖核心场景 `NiumaSceneController` | 不建议 | 自动查找失败时按钮无效 |
+| `Target Scene Name` | 填 Build Settings 中场景名 | 加载场景时不可以 | `LoadConfiguredScene()` 不执行 |
+| `Target Spawn Point Id` | 填目标出生点 ID | 可以 | 留空时走目标场景默认点 |
+| `Restore Player At Target Spawn Point` | 需要进场定位时开启 | 可以 | 关闭后 `Target Spawn Point Id` 被忽略 |
+| `Purpose` | 选 `MiniGame` / `EnterBuilding` / `Teleport` 等 | 可以 | `None` 按普通切换处理 |
+| `Push Return Context` | 需要返回时开启 | 可以 | 关闭后 `ReturnToPreviousScene()` 找不到本次来源 |
+| `Return Spawn Point Id` | 填返回点 ID，例如 `npc_minigame_return` | 建议填写 | 为空时返回后可能走默认点 |
+| `Clear Return Stack Before Push` | 主菜单进游戏可开 | 可以 | 普通入口误开会清掉旧返回链 |
+| `Freeze Input During Load` | 正式切场景建议开启 | 可以 | 关闭后加载中玩家可能继续操作 |
+| `Show Loading UI` | 跨场景加载建议开启 | 可以 | 关闭后不显示 Loading 面板 |
+| `Request Checkpoint Save` | 进入小游戏/副本/剧情节点可开 | 可以 | 关闭后不请求检查点保存 |
 
 - `SceneRoot`：挂 `NiumaSceneController`，配置 fallbackSceneName、返回栈深度、默认加载选项。
 - `SceneRoot/Bootstrapper`：首场景需要自动进入主场景时挂 `NiumaGameBootstrapper`。
