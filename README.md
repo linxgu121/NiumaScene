@@ -23,7 +23,7 @@ NiumaScene 是场景流程模块，负责统一场景加载、返回上下文、
 - 返回点 ID 应配置在 NPC 或入口附近的 SceneSpawnPoint。
 - 同场景传送可使用 TeleportToSpawnPoint，不必重新加载场景。
 - Unity Button 不建议直接绑定 `NiumaSceneController.LoadScene`，因为它返回 `SceneTransitionHandle`，不适合作为 Inspector 按钮事件。按钮跳转请使用 `SceneButtonAction`。
-- 核心场景搭建请先阅读 [核心场景制作指南.md](核心场景制作指南.md)，全局控制器应放核心场景常驻，业务场景只放场景内容。
+- 核心场景搭建请先阅读 [核心场景制作指南.md](核心场景制作指南.md)，其中包含脚本挂载位置、Inspector 字段填写方式、可否留空和不填后果。全局控制器应放核心场景常驻，业务场景只放场景内容。
 
 ### 场景切换配置速查
 - `Purpose`：选择本次切换用途。`MiniGame`（RPG 进入小游戏）、`EnterBuilding`（室外进室内）、`ExitBuilding`（室内回室外）、`Teleport`（传送点/地图跳转）、`Respawn`（死亡回检查点）、`Return`（返回上一场景）、`Debug`（测试按钮）。
@@ -37,6 +37,17 @@ NiumaScene 是场景流程模块，负责统一场景加载、返回上下文、
 
 ## 场景使用方法
 推荐放置方式：`SceneRoot` 一个全局场景流程物体承载加载服务、Loading UI、输入冻结和检查点桥接。
+
+## 场景挂载与 Inspector 配置
+NiumaScene 的挂载脚本较多，已单独整理成 [核心场景制作指南.md](核心场景制作指南.md)。  
+该文档包含：
+
+- 核心场景推荐层级。
+- 每个脚本建议挂载位置。
+- Inspector 字段怎么填。
+- 字段能否留空。
+- 不填或关闭后的影响。
+- RPG、MiniGame、建筑等业务场景还需要放哪些局部脚本。
 
 - `SceneRoot`：挂 `NiumaSceneController`，配置 fallbackSceneName、返回栈深度、默认加载选项。
 - `SceneRoot/Bootstrapper`：首场景需要自动进入主场景时挂 `NiumaGameBootstrapper`。
