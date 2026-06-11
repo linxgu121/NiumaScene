@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using NiumaScene.Controller;
 using NiumaScene.Data;
 using UnityEngine;
+using UnityEngine.SceneManagement;
 
 namespace NiumaScene.Loading
 {
@@ -26,8 +27,11 @@ namespace NiumaScene.Loading
         [SerializeField] private MonoBehaviour loadingReceiverProvider;
 
         [Header("输入冻结")]
-        [Tooltip("需要冻结输入的目标脚本列表。玩家控制拖 TPCSceneInputBlockTarget，交互输入拖 InteractSceneInputBlockTarget；还有其它输入系统时再拖对应适配脚本。")]
+        [Tooltip("需要冻结输入的目标脚本列表。如果玩家/交互系统在核心场景常驻，可手动拖 TPCSceneInputBlockTarget / InteractSceneInputBlockTarget；如果它们在业务场景中，开启自动查找即可，不要跨场景硬拖。")]
         [SerializeField] private MonoBehaviour[] inputBlockTargetProviders = Array.Empty<MonoBehaviour>();
+
+        [Tooltip("是否自动查找当前已加载场景中的输入冻结适配器。玩家或交互物体在业务场景中时建议开启；核心场景常驻玩家并已手动绑定时可关闭。")]
+        [SerializeField] private bool autoFindInputBlockTargets = true;
 
         [Tooltip("输入冻结原因。适配器应使用该原因只解除自己加上的阻塞。")]
         [SerializeField] private string inputBlockReason = DefaultBlockReason;
@@ -52,12 +56,15 @@ namespace NiumaScene.Loading
 
         private void OnEnable()
         {
+            SceneManager.sceneLoaded += HandleSceneLoaded;
             ResolveReferences(false);
             ForceApplySnapshot();
         }
 
         private void OnDisable()
         {
+            SceneManager.sceneLoaded -= HandleSceneLoaded;
+
             if (_isInputBlockedByBridge && unblockWhenLoadingEnds)
             {
                 ApplyInputBlocked(false);
@@ -111,6 +118,15 @@ namespace NiumaScene.Loading
             LateUpdate();
         }
 
+        private void HandleSceneLoaded(Scene scene, LoadSceneMode mode)
+        {
+            ResolveReferences(false);
+            if (_isInputBlockedByBridge)
+            {
+                ApplyInputBlocked(true);
+            }
+        }
+
         private bool EnsureController()
         {
             if (sceneController != null)
@@ -142,27 +158,60 @@ namespace NiumaScene.Loading
             }
 
             _inputBlockTargets.Clear();
-            if (inputBlockTargetProviders == null)
+            if (inputBlockTargetProviders != null)
+            {
+                for (var i = 0; i < inputBlockTargetProviders.Length; i++)
+                {
+                    var provider = inputBlockTargetProviders[i];
+                    if (provider == null)
+                    {
+                        continue;
+                    }
+
+                    if (provider is ISceneInputBlockTarget target)
+                    {
+                        AddInputBlockTarget(target);
+                        continue;
+                    }
+
+                    Warn($"InputBlockTargetProviders[{i}] 绑定的不是输入冻结适配脚本。玩家控制拖 TPCSceneInputBlockTarget，交互输入拖 InteractSceneInputBlockTarget。", logInvalid);
+                }
+            }
+
+            if (autoFindInputBlockTargets)
+            {
+                AutoFindInputBlockTargets();
+            }
+        }
+
+        private void AutoFindInputBlockTargets()
+        {
+            var behaviours = FindObjectsByType<MonoBehaviour>(FindObjectsInactive.Include, FindObjectsSortMode.None);
+            for (var i = 0; i < behaviours.Length; i++)
+            {
+                if (behaviours[i] is ISceneInputBlockTarget target)
+                {
+                    AddInputBlockTarget(target);
+                }
+            }
+        }
+
+        private void AddInputBlockTarget(ISceneInputBlockTarget target)
+        {
+            if (target == null)
             {
                 return;
             }
 
-            for (var i = 0; i < inputBlockTargetProviders.Length; i++)
+            for (var i = 0; i < _inputBlockTargets.Count; i++)
             {
-                var provider = inputBlockTargetProviders[i];
-                if (provider == null)
+                if (ReferenceEquals(_inputBlockTargets[i], target))
                 {
-                    continue;
+                    return;
                 }
-
-                if (provider is ISceneInputBlockTarget target)
-                {
-                    _inputBlockTargets.Add(target);
-                    continue;
-                }
-
-                Warn($"InputBlockTargetProviders[{i}] 绑定的不是输入冻结适配脚本。玩家控制拖 TPCSceneInputBlockTarget，交互输入拖 InteractSceneInputBlockTarget。", logInvalid);
             }
+
+            _inputBlockTargets.Add(target);
         }
 
         private void ApplySnapshot(SceneLoadingSnapshot snapshot)

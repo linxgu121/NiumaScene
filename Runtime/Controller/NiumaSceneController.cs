@@ -34,7 +34,7 @@ namespace NiumaScene.Controller
         [SerializeField] private bool logWarnings = true;
 
         [Header("检查点保存")]
-        [Tooltip("检查点保存请求脚本。通常拖 NiumaSceneSaveCheckpointRequester；没有接入 NiumaSave 检查点流程时可留空。")]
+        [Tooltip("核心场景里的检查点保存桥接脚本。拖 SceneRoot/CheckpointRequester 上的 NiumaSceneSaveCheckpointRequester，不是拖业务场景对象；没有接入 NiumaSave 检查点流程时可留空。")]
         [SerializeField] private MonoBehaviour checkpointRequesterProvider;
 
         [Tooltip("未手动绑定检查点请求器时，是否自动查找场景中的 ISceneCheckpointRequester。正式场景建议手动绑定。")]

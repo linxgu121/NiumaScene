@@ -10,13 +10,13 @@ namespace NiumaScene.SaveBridge
 {
     /// <summary>
     /// NiumaScene 到 NiumaSave 的检查点保存桥接。
-    /// Scene 模块只发起保存意图，真正的槽位轮替、Provider 导出和文件写入由 NiumaSaveController 负责。
+    /// Scene 模块只发起保存意图，真正的槽位轮替、Provider 导出和文件写入由 NiumaSaveController 负责。`r`n    /// 本脚本应放在核心场景常驻物体上；其他业务场景的数据由各模块 SaveAdapter 注册到 NiumaSave 后自动导出。
     /// </summary>
     [DisallowMultipleComponent]
     public sealed class NiumaSceneSaveCheckpointRequester : MonoBehaviour, ISceneCheckpointRequester
     {
         [Header("存档控制器")]
-        [Tooltip("NiumaSave 根控制器。为空时会在场景中自动查找。正式场景建议手动绑定 BootstrapRoot 上的 NiumaSaveController。")]
+        [Tooltip("核心场景里的 NiumaSave 根控制器。拖 SaveRoot 上的 NiumaSaveController；不要拖业务场景对象，业务场景数据由各模块 SaveAdapter 自动注册导出。为空时会自动查找。正式场景建议手动绑定。")]
         [SerializeField] private NiumaSaveController saveController;
 
         [Tooltip("未手动绑定 SaveController 时，是否自动查找场景中的 NiumaSaveController。")]
