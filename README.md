@@ -117,6 +117,30 @@ MiniGame / Building / Dungeon 等场景按需放自己的输入适配器
 这种情况下，核心场景的 `Input Block Target Providers` 可以留空，但 `Auto Find Input Block Targets` 要开启。业务场景加载完成后，`SceneLoadingStateBridge` 会自动查找当前已加载场景里的 `TPCSceneInputBlockTarget`、`InteractSceneInputBlockTarget`。不要尝试在核心场景 Inspector 中跨场景拖业务场景对象，Unity 不适合保存这种引用。
 
 如果玩家是运行时生成的，并且生成时间晚于场景加载完成，生成后需要调用 `SceneLoadingStateBridge.RebuildTargets()`，或者把玩家预制体放在场景初始层级中。
+### SceneLoadingToolkitBridge
+建议挂载位置：`CoreScene/BootstrapRoot/UIRoot/UIBridges/SceneLoadingToolkitBridge`。
+
+用途：把 `SceneLoadingSnapshot` 转成 NiumaUI Toolkit 的 Loading View。它是 `SceneLoadingPanelBridge` 的 UI Toolkit 替代方案；二者选一个绑定给 `SceneLoadingStateBridge.Loading Receiver Provider` 即可，不建议同时绑定。
+
+依赖：核心场景需要已经配置好 `UIToolkitUIManager`，并在 `UIToolkitViewRegistrySO` 中注册 `Loading` ViewId。`Loading` View 可以直接使用 NiumaUI 提供的 `ToolkitLoadingBindingProvider`，也可以由团队自定义实现 `IToolkitLoadingBinding`。
+
+| 字段 | 怎么填 | 可否留空 | 不填会怎样 |
+| --- | --- | --- | --- |
+| `UI Manager` | 拖核心场景 `UIRoot/UIManager` 上的 `UIToolkitUIManager` | 可以 | 开启自动查找时会尝试找；仍找不到则不显示 Loading |
+| `Auto Find UI Manager` | 测试可开，正式建议手动绑定后关闭 | 可以 | 关闭且未绑定时 Loading 不显示 |
+| `Loading / Activating / Completed / Failed Text` | 填加载中、正在进入、加载完成、加载失败等文案 | 可以 | 使用默认中文文案 |
+| `Hide When Loading Ends` | 建议开启 | 可以 | 关闭后加载结束不会主动 HideLoading |
+| `Use Snapshot Input Block Flag` | 建议开启 | 可以 | 关闭后 Loading View 始终按阻塞处理 |
+| `Log Warnings` | 建议开启 | 可以 | 关闭后缺 UIManager 时不提示 |
+
+绑定步骤：
+
+1. 核心场景中创建 `UIRoot/UIBridges/SceneLoadingToolkitBridge`。
+2. 挂 `SceneLoadingToolkitBridge`。
+3. `UI Manager` 拖 `UIRoot/UIManager` 上的 `UIToolkitUIManager`。
+4. 选中 `SceneRoot/LoadingRoot/SceneLoadingStateBridge`。
+5. 把 `SceneLoadingToolkitBridge` 拖到 `Loading Receiver Provider`。
+6. 如果还绑定着旧的 `SceneLoadingPanelBridge`，先解绑，避免两个 Loading UI 同时响应。
 ### SceneLoadingPanelBridge
 建议挂载位置：`CoreScene/BootstrapRoot/UIRoot/Canvas_Global/LoadingPanel`。
 
