@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using NiumaScene.Controller;
 using NiumaScene.Data;
@@ -9,38 +9,38 @@ namespace NiumaScene.Loading
 {
     /// <summary>
     /// 场景加载状态桥接层。
-    /// 负责把 SceneService 的数据快照推给 Loading UI，并把输入冻结请求转发给各业务模块适配器。
+    /// 负责把 SceneService 的加载快照推给 Loading UI，并把输入冻结请求转发给各业务模块适配器。
     /// </summary>
     public sealed class SceneLoadingStateBridge : MonoBehaviour
     {
         private const string DefaultBlockReason = "SceneLoading";
 
         [Header("场景控制器")]
-        [Tooltip("NiumaScene 根控制器。为空时会在场景中自动查找。")]
+        [Tooltip("NiumaScene 根控制器。正式核心场景建议拖 SceneRoot 上的 NiumaSceneController；为空时可自动查找。")]
         [SerializeField] private NiumaSceneController sceneController;
 
-        [Tooltip("SceneController 未绑定时，是否自动查找场景中的 NiumaSceneController。正式场景建议手动绑定。")]
+        [Tooltip("Scene Controller 未绑定时，是否自动查找场景中的 NiumaSceneController。正式核心场景建议手动绑定后关闭。")]
         [SerializeField] private bool autoFindSceneController = true;
 
         [Header("加载表现")]
-        [Tooltip("Loading 面板脚本。拖 SceneLoadingPanelBridge 或团队制作的 LoadingPanel 脚本；为空时只冻结/解冻输入，不显示 Loading UI。")]
+        [Tooltip("Loading 接收脚本。UI Toolkit 正式方案拖 SceneLoadingToolkitBridge；旧 UGUI 测试场景才拖 SceneLoadingPanelBridge；为空时只冻结/解冻输入，不显示 Loading UI。")]
         [SerializeField] private MonoBehaviour loadingReceiverProvider;
 
         [Header("输入冻结")]
-        [Tooltip("需要冻结输入的目标脚本列表。如果玩家/交互系统在核心场景常驻，可手动拖 TPCSceneInputBlockTarget / InteractSceneInputBlockTarget；如果它们在业务场景中，开启自动查找即可，不要跨场景硬拖。")]
+        [Tooltip("需要冻结输入的目标脚本列表。玩家/交互系统常驻核心场景时可手动拖 TPCSceneInputBlockTarget / InteractSceneInputBlockTarget；它们在业务场景时请开启自动查找，不要跨场景硬拖。")]
         [SerializeField] private MonoBehaviour[] inputBlockTargetProviders = Array.Empty<MonoBehaviour>();
 
-        [Tooltip("是否自动查找当前已加载场景中的输入冻结适配器。玩家或交互物体在业务场景中时建议开启；核心场景常驻玩家并已手动绑定时可关闭。")]
+        [Tooltip("是否自动查找当前已加载场景中的输入冻结适配器。玩家或交互物体在业务场景中时建议开启；核心场景常驻玩家且已手动绑定时可关闭。")]
         [SerializeField] private bool autoFindInputBlockTargets = true;
 
-        [Tooltip("输入冻结原因。适配器应使用该原因只解除自己加上的阻塞。")]
+        [Tooltip("输入冻结原因。适配器应使用该原因只解除本桥接添加的阻塞，避免覆盖对话、死亡、菜单等其他系统的禁用状态。")]
         [SerializeField] private string inputBlockReason = DefaultBlockReason;
 
-        [Tooltip("加载结束或组件禁用时，是否解除本桥接层加上的输入冻结。使用支持 reason 的适配器时建议开启。")]
+        [Tooltip("加载结束或组件禁用时，是否解除本桥接添加的输入冻结。建议开启。")]
         [SerializeField] private bool unblockWhenLoadingEnds = true;
 
         [Header("调试")]
-        [Tooltip("依赖缺失或组件未实现接口时是否输出警告。")]
+        [Tooltip("依赖缺失、接口绑定错误或自动查找失败时是否输出警告。")]
         [SerializeField] private bool logWarnings = true;
 
         private readonly List<ISceneInputBlockTarget> _inputBlockTargets = new List<ISceneInputBlockTarget>(4);
@@ -92,20 +92,12 @@ namespace NiumaScene.Loading
             ApplySnapshot(snapshot);
         }
 
-        /// <summary>
-        /// 外部手动指定 SceneController。
-        /// 常用于 Bootstrap 初始化或测试场景中显式注入。
-        /// </summary>
         public void SetSceneController(NiumaSceneController controller)
         {
             sceneController = controller;
             ForceApplySnapshot();
         }
 
-        /// <summary>
-        /// 重新解析 Receiver 和输入阻塞目标。
-        /// 当运行时动态替换 UI 或输入适配器时调用。
-        /// </summary>
         public void RebuildTargets()
         {
             ResolveReferences(true);
@@ -154,7 +146,7 @@ namespace NiumaScene.Loading
             _loadingReceiver = loadingReceiverProvider as ISceneLoadingReceiver;
             if (loadingReceiverProvider != null && _loadingReceiver == null)
             {
-                Warn("LoadingReceiver 绑定的不是 Loading 面板脚本，请拖 SceneLoadingPanelBridge 或团队制作的 LoadingPanel 脚本。", logInvalid);
+                Warn("Loading Receiver 绑定的不是加载表现脚本。UI Toolkit 正式方案请拖 SceneLoadingToolkitBridge；旧 UGUI 测试场景才拖 SceneLoadingPanelBridge。", logInvalid);
             }
 
             _inputBlockTargets.Clear();
@@ -174,7 +166,7 @@ namespace NiumaScene.Loading
                         continue;
                     }
 
-                    Warn($"InputBlockTargetProviders[{i}] 绑定的不是输入冻结适配脚本。玩家控制拖 TPCSceneInputBlockTarget，交互输入拖 InteractSceneInputBlockTarget。", logInvalid);
+                    Warn($"Input Block Target Providers[{i}] 绑定的不是输入冻结适配脚本。玩家控制拖 TPCSceneInputBlockTarget，交互输入拖 InteractSceneInputBlockTarget。", logInvalid);
                 }
             }
 

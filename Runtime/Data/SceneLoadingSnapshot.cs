@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using NiumaScene.Enum;
 
 namespace NiumaScene.Data

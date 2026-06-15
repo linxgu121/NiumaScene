@@ -1,4 +1,4 @@
-namespace NiumaScene.Loading
+﻿namespace NiumaScene.Loading
 {
     /// <summary>
     /// 场景加载输入阻塞目标。

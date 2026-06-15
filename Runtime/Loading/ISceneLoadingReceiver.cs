@@ -1,4 +1,4 @@
-using NiumaScene.Data;
+﻿using NiumaScene.Data;
 
 namespace NiumaScene.Loading
 {
