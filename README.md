@@ -1,4 +1,4 @@
-﻿# NiumaScene
+# NiumaScene
 
 ## 模块定位
 NiumaScene 是场景流程模块，负责统一场景加载、返回上下文、出生点恢复、加载状态、输入冻结、检查点保存意图和场景 UI 桥接。
@@ -43,11 +43,12 @@ CoreScene
     │   ├── EventSystem
     │   ├── UIToolkitRoot
     │   ├── UIManager
+    │   ├── DataBridges
     │   ├── UIBridges
     │   └── BindingProviders
     ├── AudioRoot
     ├── SaveRoot
-    └── GameplayServicesRoot
+    └── GameplayServicesRoot    # 只放未在其它位置挂过的全局服务 Controller
 ```
 
 ### SceneLoadingToolkitBridge
@@ -68,9 +69,12 @@ CoreScene
 ## UI Toolkit 相关场景约定
 - `UIRoot/UIManager` 是物体名，上面挂 `UIToolkitUIManager` 和 `UIToolkitViewFactory`，不要再寻找旧 UGUI `UIManager` 脚本。
 - `UIRoot/UIToolkitRoot` 放各层 `UIDocument`。
-- `UIRoot/UIBridges` 放 `SceneLoadingToolkitBridge`、`InteractionPromptToolkitSink`、`NiumaGalToolkitDialogueViewBridge` 和各模块 `XxxToolkitReceiver`。
-- `UIRoot/BindingProviders` 放各模块 `XxxToolkitBindingProvider`，并拖到 `UIToolkitViewFactory.Binding Provider Behaviours`。
+- `UIRoot/DataBridges` 放业务数据桥接和命令入口。部分现有脚本名仍是 `XxxUIViewBridge`，但它们不是旧 UGUI 绑定，而是把模块 Service 的 ViewData 转成 UIUpdate。
+- `UIRoot/UIBridges` 放 `SceneLoadingToolkitBridge`、`InteractionPromptToolkitSink`、`NiumaGalToolkitDialogueViewBridge` 和各模块 `XxxToolkitReceiver`，只负责打开或刷新 Toolkit View。
+- `UIRoot/BindingProviders` 放各模块 `XxxToolkitBindingProvider`，并拖到 `UIToolkitViewFactory.Binding Provider Behaviours`。添加组件时搜索脚本类名，不要按文件名找；例如 `GrowthToolkitBindingProvider` 在 `GrowthToolkitBridge.cs` 中，`EffectToolkitBindingProvider` 在 `EffectToolkitBridge.cs` 中。
 - `UIToolkitViewRegistrySO` 统一注册 ViewId、LayerId、BindingProviderId、InputPolicy。
+- `XxxUIViewBridge` 是历史命名，现在应理解为“业务数据桥接/命令入口”。它通常放在 `UIRoot/DataBridges`，Receiver Provider 拖同模块 `XxxToolkitReceiver`，不要把它当旧 UGUI 面板脚本挂到按钮或图片文字上。
+- `GameplayServicesRoot` 只放全局常驻且没有在其它位置挂过的服务 Controller。同一个模块 Controller 不要在核心场景和业务场景各挂一份；Controller 不是单例，重复挂载会覆盖 `GameContext` 注册并让 UI、存档、桥接拿到不同实例。
 
 ## 常见错误
 ### ReturnContextMissing
@@ -81,6 +85,11 @@ CoreScene
 - `SceneLoadingToolkitBridge.UI Manager` 没绑定 `UIToolkitUIManager`。
 - `UIToolkitViewRegistrySO` 没注册 `Loading` View。
 - `UIToolkitViewFactory.Layer Roots` 没配置 Loading 层的 `UIDocument`。
+
+### 业务面板打开但没有内容
+- 对应 `XxxToolkitBindingProvider` 没拖进 `UIToolkitViewFactory.Binding Provider Behaviours`。
+- 对应 `XxxUIViewBridge` 的 Receiver Provider 没拖同模块 `XxxToolkitReceiver`。
+- 同模块 Controller 重复挂载，DataBridge 和 SaveAdapter 绑定到了不同实例。
 
 ## 协作边界
 Scene 不直接保存文件、不直接控制玩家内部逻辑，只通过接口发出冻结、出生点、检查点和 Loading 表现意图。
